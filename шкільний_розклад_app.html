@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Шкільний розклад</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; background: #f4f4f4; }
+    h1 { color: #333; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #999; padding: 6px; text-align: center; }
+    th { background-color: #eee; }
+    select, input { margin: 5px; padding: 5px; }
+    .controls { margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <h1>Шкільний розклад</h1>
+  <div class="controls">
+    <label for="classSelect">Клас:</label>
+    <select id="classSelect"></select>
+    <button onclick="renderSchedule()">Показати розклад</button>
+  </div>
+
+  <table id="scheduleTable">
+    <thead>
+      <tr>
+        <th>Урок</th>
+        <th>Понеділок</th>
+        <th>Вівторок</th>
+        <th>Середа</th>
+        <th>Четвер</th>
+        <th>Пʼятниця</th>
+      </tr>
+    </thead>
+    <tbody id="scheduleBody"></tbody>
+  </table>
+
+  <script>
+    const classes = [
+      "1", "2-А", "2-Б", "3-А", "3-Б", "4-А", "4-Б", "5-А", "5-Б", "5-В",
+      "6-А", "6-Б", "6-В", "6-Г", "7-А", "7-Б", "7-В", "8-А", "8-Б", "8-В",
+      "9-А", "9-Б", "9-В"
+    ];
+
+    const lessonsPerDay = 8;
+    const weekdays = ["Понеділок", "Вівторок", "Середа", "Четвер", "Пʼятниця"];
+
+    // Прикладові дані (можна змінити або зберігати в localStorage)
+    let schedules = {};
+
+    function init() {
+      const select = document.getElementById("classSelect");
+      classes.forEach(cls => {
+        const option = document.createElement("option");
+        option.value = cls;
+        option.textContent = cls;
+        select.appendChild(option);
+      });
+    }
+
+    function renderSchedule() {
+      const cls = document.getElementById("classSelect").value;
+      const tbody = document.getElementById("scheduleBody");
+      tbody.innerHTML = "";
+
+      for (let i = 1; i <= lessonsPerDay; i++) {
+        const row = document.createElement("tr");
+        const numCell = document.createElement("td");
+        numCell.textContent = i;
+        row.appendChild(numCell);
+
+        weekdays.forEach(day => {
+          const cell = document.createElement("td");
+          const input = document.createElement("input");
+          input.type = "text";
+          input.placeholder = "Предмет / підгрупа";
+
+          const key = `${cls}-${day}-${i}`;
+          input.value = schedules[key] || "";
+
+          input.addEventListener("change", () => {
+            schedules[key] = input.value;
+            localStorage.setItem("schedules", JSON.stringify(schedules));
+          });
+
+          cell.appendChild(input);
+          row.appendChild(cell);
+        });
+
+        tbody.appendChild(row);
+      }
+    }
+
+    window.onload = () => {
+      const saved = localStorage.getItem("schedules");
+      if (saved) schedules = JSON.parse(saved);
+      init();
+      renderSchedule();
+    };
+  </script>
+</body>
+</html>
