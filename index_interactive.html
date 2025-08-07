@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Шкільний розклад — інтерактивний</title>
+<style>
+  :root{--blue:#2f80ed;--bg:#f7f9fc;}
+  html,body{margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:#222}
+  .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+  header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+  h1{font-size:22px;margin:0}
+  .controls{display:flex;flex-wrap:wrap;gap:8px}
+  select,button,input[type="text"]{padding:8px 12px;border:1px solid #cdd6e1;border-radius:8px;background:#fff;font-size:14px}
+  button.primary{background:var(--blue);color:#fff;border-color:var(--blue);cursor:pointer}
+  button{cursor:pointer}
+  .table-wrap{overflow:auto;margin-top:12px;border:1px solid #e4e9f0;border-radius:12px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.04)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{border-bottom:1px solid #eef2f7;padding:10px;text-align:center}
+  thead th{position:sticky;top:0;background:var(--blue);color:#fff;z-index:1}
+  tbody tr:nth-child(odd){background:#fbfdff}
+  td.period{white-space:nowrap;font-weight:600}
+  td input{width:100%;border:none;background:transparent;text-align:center;font:inherit;padding:6px;outline:none}
+  .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;font-size:12px;color:#555}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid #e5eaf1;background:#fff}
+  .sw{width:14px;height:14px;border-radius:4px;border:1px solid #d0d7e2}
+  footer{margin:18px 0 8px;color:#6b7686;font-size:12px;text-align:center}
+  @media (max-width:720px){
+    th:nth-child(3),td:nth-child(3){position:sticky;left:0;background:#fff;border-right:1px solid #eef2f7;z-index:2}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Шкільний розклад — інтерактивний</h1>
+    <div class="controls">
+      <label>Клас:
+        <select id="classSelect"></select>
+      </label>
+      <button class="primary" id="clearDayBtn" title="Очистити поточний день">Очистити день</button>
+      <button id="copyDayBtn" title="Скопіювати предмети з іншого дня">Копіювати день</button>
+      <button id="exportCsvBtn">Експорт CSV</button>
+      <button id="printBtn">Друк / PDF</button>
+      <input id="quickSubject" type="text" placeholder="Швидко: введіть предмет і натисніть Enter">
+    </div>
+  </header>
+
+  <div class="table-wrap">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th style="width:56px">№</th>
+          <th style="width:150px">Час</th>
+          <th>Понеділок</th>
+          <th>Вівторок</th>
+          <th>Середа</th>
+          <th>Четвер</th>
+          <th>П'ятниця</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="legend" id="legend"></div>
+  <footer>Зміни зберігаються автоматично на цьому пристрої (localStorage). Щоб оновити для всіх — замініть файл <code>index.html</code> у репозиторії GitHub Pages.</footer>
+</div>
+
+<script>
+const CLASSES = ['1','2-А','2-Б','3-А','3-Б','4-А','4-Б','5-А','5-Б','5-В','6-А','6-Б','6-В','6-Г','7-А','7-Б','7-В','8-А','8-Б','8-В','9-А','9-Б','9-В'];
+const TIMES = ['08:30 – 09:15','09:25 – 10:10','10:20 – 11:05','11:25 – 12:10','12:20 – 13:05','13:15 – 14:00','14:10 – 14:55','15:05 – 15:50'];
+const DAYS = ['Пн','Вт','Ср','Чт','Пт'];
+
+// Кольори предметів (можете доповнювати)
+const SUBJECT_COLORS = {
+  'Математика':'#e3f2fd',
+  'Українська мова':'#fff3cd',
+  'Українська':'#fff3cd',
+  'Література':'#fde2e4',
+  'Англійська мова':'#e8f5e9',
+  'Історія':'#f3e5f5',
+  'Фізкультура':'#e0f7fa',
+  'Біологія':'#f1f8e9',
+  'Географія':'#fce4ec',
+  'Інформатика':'#e8eaf6'
+};
+
+const $class = document.getElementById('classSelect');
+const $tbody = document.querySelector('#tbl tbody');
+const $quick = document.getElementById('quickSubject');
+
+// Заповнити список класів
+CLASSES.forEach(c => {
+  const o = document.createElement('option');
+  o.value = c; o.textContent = c;
+  $class.appendChild(o);
+});
+
+// Побудова таблиці
+function buildTable(){
+  $tbody.innerHTML='';
+  for(let r=0;r<8;r++){
+    const tr=document.createElement('tr');
+    const tdNo=document.createElement('td'); tdNo.textContent=r+1; tdNo.className='period'; tr.appendChild(tdNo);
+    const tdTime=document.createElement('td'); tdTime.textContent=TIMES[r]; tdTime.className='period'; tr.appendChild(tdTime);
+    for(let d=0; d<5; d++){
+      const td=document.createElement('td');
+      const inp=document.createElement('input');
+      inp.placeholder='предмет / підгр.';
+      inp.dataset.r=r; inp.dataset.d=d;
+      inp.addEventListener('input', handleChange);
+      inp.addEventListener('blur', handleChange);
+      td.appendChild(inp);
+      tr.appendChild(td);
+    }
+    $tbody.appendChild(tr);
+  }
+}
+
+function key(){ return 'rozklad_'+$class.value; }
+
+// Завантаження/збереження
+function load(){
+  const data = JSON.parse(localStorage.getItem(key())||'{}');
+  document.querySelectorAll('#tbl tbody input').forEach(inp=>{
+    const k = inp.dataset.r+'_'+inp.dataset.d;
+    inp.value = data[k] || '';
+    paint(inp);
+  });
+}
+function save(){
+  const data={};
+  document.querySelectorAll('#tbl tbody input').forEach(inp=>{
+    const v = inp.value.trim();
+    const k = inp.dataset.r+'_'+inp.dataset.d;
+    if(v) data[k]=v;
+  });
+  localStorage.setItem(key(), JSON.stringify(data));
+}
+function handleChange(e){
+  paint(e.target);
+  save();
+}
+
+// Розфарбування за предметом
+function paint(inp){
+  const v=inp.value.trim();
+  const td = inp.parentElement;
+  const color = SUBJECT_COLORS[v] || '';
+  td.style.backgroundColor = color;
+}
+
+// Копіювання дня
+function copyDay(){
+  const from = prompt('З якого дня копіювати? 0=Пн,1=Вт,2=Ср,3=Чт,4=Пт');
+  if(from===null) return;
+  const f = parseInt(from,10);
+  if(isNaN(f)||f<0||f>4) return alert('Вкажіть число 0..4');
+  for(let r=0;r<8;r++){
+    const src = document.querySelector(`input[data-r="${r}"][data-d="${f}"]`).value;
+    for(let d=0; d<5; d++){
+      if(d===f) continue;
+      const inp = document.querySelector(`input[data-r="${r}"][data-d="${d}"]`);
+      inp.value = src;
+      paint(inp);
+    }
+  }
+  save();
+}
+
+// Очистити день
+function clearDay(){
+  const day = prompt('Який день очистити? 0=Пн,1=Вт,2=Ср,3=Чт,4=Пт');
+  if(day===null) return;
+  const d = parseInt(day,10);
+  if(isNaN(d)||d<0||d>4) return alert('Вкажіть число 0..4');
+  for(let r=0;r<8;r++){
+    const inp = document.querySelector(`input[data-r="${r}"][data-d="${d}"]`);
+    inp.value=''; paint(inp);
+  }
+  save();
+}
+
+// Швидке заповнення
+$quick.addEventListener('keydown', e=>{
+  if(e.key==='Enter'){
+    const v = $quick.value.trim();
+    if(!v) return;
+    document.querySelectorAll('#tbl tbody input').forEach(inp=>{
+      if(!inp.value.trim()){ inp.value=v; paint(inp);}
+    });
+    $quick.value='';
+    save();
+  }
+});
+
+// Експорт CSV
+function exportCSV(){
+  let csv='№,Час,Пн,Вт,Ср,Чт,Пт\n';
+  for(let r=0;r<8;r++){
+    const row=[r+1, TIMES[r]];
+    for(let d=0; d<5; d++){
+      const val = document.querySelector(`input[data-r="${r}"][data-d="${d}"]`).value.replace(/"/g,'""');
+      row.push(`"${val}"`);
+    }
+    csv += row.join(',')+'\n';
+  }
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`Розклад_${$class.value}.csv`;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+// Друк
+function doPrint(){ window.print(); }
+
+// Легенда кольорів
+function buildLegend(){
+  const $leg=document.getElementById('legend');
+  $leg.innerHTML='';
+  Object.entries(SUBJECT_COLORS).forEach(([name,color])=>{
+    const chip=document.createElement('div'); chip.className='chip';
+    const sw=document.createElement('span'); sw.className='sw'; sw.style.background=color;
+    const txt=document.createElement('span'); txt.textContent=name;
+    chip.appendChild(sw); chip.appendChild(txt);
+    $leg.appendChild(chip);
+  });
+}
+
+// Події
+document.getElementById('copyDayBtn').onclick = copyDay;
+document.getElementById('clearDayBtn').onclick = clearDay;
+document.getElementById('exportCsvBtn').onclick = exportCSV;
+document.getElementById('printBtn').onclick = doPrint;
+$class.onchange = ()=>{ buildTable(); load(); };
+
+// Ініціалізація
+buildTable(); buildLegend(); $class.value=CLASSES[0]; load();
+</script>
+</body>
+</html>
